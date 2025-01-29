@@ -1,0 +1,21 @@
+{
+  "name": "oracle-transfer-api",
+  "module": "index.ts",
+  "type": "module",
+  "scripts": {
+    "docker:build": "docker build -t oracle-transfer-api .",
+    "docker:start": "docker run -d --name oracle-transfer-api -v ~/db.sqlite:/var/lib/oracle-transfer/db.sqlite oracle-transfer-api",
+    "docker:stop": "docker stop oracle-transfer-api && docker rm oracle-transfer-api"
+  },
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5.0.0"
+  },
+  "dependencies": {
+    "@chromia/ft4": "^1.0.1",
+    "@megayours/sdk": "^0.1.27",
+    "postchain-client": "^1.20.2"
+  }
+}
