@@ -30,7 +30,7 @@ export async function run(db: Database, gammaClient: IClient, pfpClient: IClient
     token_id: row.token.token_id,
   });
 
-  console.log(`Token ${row.token.token_id} on ${row.chain} detected`);
+  console.log(`Token ${row.token.collection} :: #${row.token.token_id} on ${row.chain} detected`);
 
   if (tokenOnGamma) {
     console.log(`Token ${row.token.token_id} on ${row.chain} found on Gamma`);

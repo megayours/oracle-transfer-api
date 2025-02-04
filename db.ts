@@ -6,9 +6,14 @@ export function initDb(db: Database) {
 }
 
 export function addProcessedRow(db: Database, rowid: number) {
-  const query = db.query('INSERT INTO processed_rows (rowid) VALUES (?)');
-  query.run(rowid);
-  console.log(`Added rowid ${rowid} to processed_rows`);
+  const query = db.query('INSERT OR IGNORE INTO processed_rows (rowid) VALUES (?)');
+  const result = query.run(rowid);
+  
+  if (result.changes === 0) {
+    console.log(`Row ${rowid} already processed, skipping`);
+  } else {
+    console.log(`Added rowid ${rowid} to processed_rows`);
+  }
 }
 
 export function getLastProcessedRow(db: Database): number | null {
