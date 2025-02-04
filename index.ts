@@ -16,7 +16,7 @@ const interval = setInterval(async () => {
   console.log('Running periodic task:', new Date().toISOString());
   run(db, gammaClient, pfpClient, oracleSignatureProvider);
   // Add your custom logic here
-}, 60000);
+}, 10000);
 
 async function ensureClients() {
   if (!gammaClient) {

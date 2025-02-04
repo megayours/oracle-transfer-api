@@ -8,6 +8,7 @@ export function initDb(db: Database) {
 export function addProcessedRow(db: Database, rowid: number) {
   const query = db.query('INSERT INTO processed_rows (rowid) VALUES (?)');
   query.run(rowid);
+  console.log(`Added rowid ${rowid} to processed_rows`);
 }
 
 export function getLastProcessedRow(db: Database): number | null {
@@ -15,5 +16,6 @@ export function getLastProcessedRow(db: Database): number | null {
     'SELECT rowid FROM processed_rows ORDER BY rowid DESC LIMIT 1'
   );
   const result = query.get();
+  console.log(`Last processed rowid: ${result?.rowid}`);
   return result?.rowid ?? null;
 }
