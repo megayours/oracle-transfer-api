@@ -22,7 +22,7 @@ type TokenRow = {
 export async function run(db: Database, gammaClient: IClient, pfpClient: IClient, oracleSignatureProvider: SignatureProvider) {
   const rowid = getLastProcessedRow(db) ?? 0;
   const row = await gammaClient.query<TokenRow>('tokens.get_token_after', { rowid });
-  if (!row) return;
+  if (!row || row.contract === Buffer.from('6721B9F19a1667E77107581eF79b9F2F106E81E0', 'hex')) return;
 
   const tokenOnGamma = await gammaClient.query<TokenRow>('yours.external.get_token', {
     chain: row.chain,
@@ -45,84 +45,88 @@ export async function run(db: Database, gammaClient: IClient, pfpClient: IClient
 }
 
 async function transferToken(gammaClient: IClient, pfpClient: IClient, row: TokenRow, oracleSignatureProvider: SignatureProvider) {
-  // Create management chain client
-  const nodeUrl = gammaClient.config.endpointPool[0].url;
-  const managementChain = await createClient({
-    directoryNodeUrlPool: [nodeUrl],
-    blockchainIid: 0,
-  });
+  try {
+    // Create management chain client
+    const nodeUrl = gammaClient.config.endpointPool[0].url;
+    const managementChain = await createClient({
+      directoryNodeUrlPool: [nodeUrl],
+      blockchainIid: 0,
+    });
 
-  // Fetch account id on target chain
-  const toAccountId = await getAccountId(pfpClient, row.owner_external_address);
-  console.log(`Account id on target chain found: ${toAccountId?.toString('hex')}`);
+    // Fetch account id on target chain
+    const toAccountId = await getAccountId(pfpClient, row.owner_external_address);
+    console.log(`Account id on target chain found: ${toAccountId?.toString('hex')}`);
 
-  // Init Transfer on Source Chain
-  const initTx = {
-    operations: [
-      op(
-        'yours.init_oracle_transfer',
-        row.owner_account_id,
-        Buffer.from(pfpClient.config.blockchainRid, 'hex'),
-        toAccountId,
-        row.token.token_id,
-        BigInt(1),
-        serializeTokenMetadata(row.token.metadata)
-      ),
-    ],
-    signers: [oracleSignatureProvider.pubKey],
-  };
+    // Init Transfer on Source Chain
+    const initTx = {
+      operations: [
+        op(
+          'yours.init_oracle_transfer',
+          row.owner_account_id,
+          Buffer.from(pfpClient.config.blockchainRid, 'hex'),
+          toAccountId,
+          row.token.token_id,
+          BigInt(1),
+          serializeTokenMetadata(row.token.metadata)
+        ),
+      ],
+      signers: [oracleSignatureProvider.pubKey],
+    };
 
-  const signedInitTx = await gammaClient.signTransaction(initTx, oracleSignatureProvider);
-  await gammaClient.sendTransaction(signedInitTx);
-  console.log(`Transfer initialized on source chain`);
+    const signedInitTx = await gammaClient.signTransaction(initTx, oracleSignatureProvider);
+    await gammaClient.sendTransaction(signedInitTx);
+    console.log(`Transfer initialized on source chain`);
 
-  await new Promise(resolve => setTimeout(resolve, 10000));
+    await new Promise(resolve => setTimeout(resolve, 10000));
 
-  const rawInitTx = gtv.decode(signedInitTx) as RawGtx;
-  const initTxRid = getTransactionRid(rawInitTx);
-  const initTxIccfProof = await createIccfProofTx(
-    managementChain,
-    initTxRid,
-    gtv.gtvHash(rawInitTx),
-    [oracleSignatureProvider.pubKey],
-    gammaClient.config.blockchainRid,
-    pfpClient.config.blockchainRid,
-    undefined,
-    true
-  );
+    const rawInitTx = gtv.decode(signedInitTx) as RawGtx;
+    const initTxRid = getTransactionRid(rawInitTx);
+    const initTxIccfProof = await createIccfProofTx(
+      managementChain,
+      initTxRid,
+      gtv.gtvHash(rawInitTx),
+      [oracleSignatureProvider.pubKey],
+      gammaClient.config.blockchainRid,
+      pfpClient.config.blockchainRid,
+      undefined,
+      true
+    );
 
-  // Apply Transfer on Destination Chain
-  const applyTx = {
-    operations: [initTxIccfProof.iccfTx.operations[0], op('yours.apply_transfer', rawInitTx, 0)],
-    signers: [oracleSignatureProvider.pubKey],
-  };
+    // Apply Transfer on Destination Chain
+    const applyTx = {
+      operations: [initTxIccfProof.iccfTx.operations[0], op('yours.apply_transfer', rawInitTx, 0)],
+      signers: [oracleSignatureProvider.pubKey],
+    };
 
-  const signedApplyTx = await pfpClient.signTransaction(applyTx, oracleSignatureProvider);
-  await pfpClient.sendTransaction(signedApplyTx);
+    const signedApplyTx = await pfpClient.signTransaction(applyTx, oracleSignatureProvider);
+    await pfpClient.sendTransaction(signedApplyTx);
 
-  console.log(`Apply tx signed and sent`);
-  await new Promise(resolve => setTimeout(resolve, 10000));
+    console.log(`Apply tx signed and sent`);
+    await new Promise(resolve => setTimeout(resolve, 10000));
 
-  const rawApplyTx = gtv.decode(signedApplyTx) as RawGtx;
-  const applyTxRid = getTransactionRid(rawApplyTx);
-  const applyTxIccfProof = await createIccfProofTx(
-    managementChain,
-    applyTxRid,
-    gtv.gtvHash(rawApplyTx),
-    [oracleSignatureProvider.pubKey],
-    pfpClient.config.blockchainRid,
-    gammaClient.config.blockchainRid,
-    undefined,
-    true
-  );
+    const rawApplyTx = gtv.decode(signedApplyTx) as RawGtx;
+    const applyTxRid = getTransactionRid(rawApplyTx);
+    const applyTxIccfProof = await createIccfProofTx(
+      managementChain,
+      applyTxRid,
+      gtv.gtvHash(rawApplyTx),
+      [oracleSignatureProvider.pubKey],
+      pfpClient.config.blockchainRid,
+      gammaClient.config.blockchainRid,
+      undefined,
+      true
+    );
 
-  // Complete Transfer on Source Chain
-  const completeTx = {
-    operations: [applyTxIccfProof.iccfTx.operations[0], op('yours.complete_transfer', rawApplyTx, 1)],
-    signers: [oracleSignatureProvider.pubKey],
-  };
+    // Complete Transfer on Source Chain
+    const completeTx = {
+      operations: [applyTxIccfProof.iccfTx.operations[0], op('yours.complete_transfer', rawApplyTx, 1)],
+      signers: [oracleSignatureProvider.pubKey],
+    };
 
-  await gammaClient.signAndSendUniqueTransaction(completeTx, oracleSignatureProvider);
+    await gammaClient.signAndSendUniqueTransaction(completeTx, oracleSignatureProvider);
+  } catch (error) {
+    console.error(`Error transferring token: ${error}`);
+  }
 }
 
 async function getAccountId(client: IClient, externalAddress: Buffer) {

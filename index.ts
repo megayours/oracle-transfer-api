@@ -3,7 +3,7 @@ import { run } from './gamma-runner';
 import { initDb } from './db';
 import { createClient, newSignatureProvider, type IClient, type SignatureProvider } from 'postchain-client';
 
-const db = new Database('/usr/src/app/data/db.sqlite');
+const db = new Database('/tmp/db.sqlite');
 initDb(db);
 
 let gammaClient: IClient;
