@@ -22,7 +22,7 @@ type TokenRow = {
 export async function run(db: Database, gammaClient: IClient, pfpClient: IClient, oracleSignatureProvider: SignatureProvider) {
   const rowid = getLastProcessedRow(db) ?? 0;
   const row = await gammaClient.query<TokenRow>('tokens.get_token_after', { rowid });
-  if (!row || row.contract === Buffer.from('6721B9F19a1667E77107581eF79b9F2F106E81E0', 'hex')) return;
+  if (!row || row.contract !== Buffer.from('6721B9F19a1667E77107581eF79b9F2F106E81E0', 'hex')) return;
 
   const tokenOnGamma = await gammaClient.query<TokenRow>('yours.external.get_token', {
     chain: row.chain,
